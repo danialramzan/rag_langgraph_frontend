@@ -26,7 +26,75 @@ import { getApiKey } from "@/lib/api-key";
 import { useThreads } from "./Thread";
 import { toast } from "sonner";
 
-export type StateType = { messages: Message[]; ui?: UIMessage[] };
+export type UserLocation = {
+  latitude: number;
+  longitude: number;
+  accuracy?: number;
+  label?: string;
+  provider?: string;
+  provider_place_id?: string;
+};
+
+export type TrialSlots = {
+  condition?: string[] | string;
+  age?: number;
+  sex?: string;
+  location?: string | UserLocation;
+  /** Legacy thread state only. New UI submits location as one object. */
+  latitude?: number;
+  /** Legacy thread state only. New UI submits location as one object. */
+  longitude?: number;
+  radius_miles?: number;
+  location_confirmed?: boolean;
+};
+
+export type TrialMatch = {
+  id?: string;
+  title?: string;
+  status?: string;
+  sponsor?: string;
+  minimum_age?: string;
+  maximum_age?: string;
+  sex?: string;
+  summary?: string;
+  condition?: string;
+  phase?: string;
+  location?: string;
+  location_status?: string;
+  latitude?: number;
+  longitude?: number;
+  contact_name?: string;
+  contact_phone?: string;
+  contact_email?: string;
+  study_contact_name?: string;
+  study_contact_phone?: string;
+  study_contact_email?: string;
+  study_official_name?: string;
+  study_official_phone?: string;
+  study_official_email?: string;
+  estimated_site_distance_miles?: number;
+  outside_radius?: boolean;
+  raw_json?: unknown;
+};
+
+export type StudyResultSnapshot = {
+  trial_count?: number | null;
+  trial_matches?: TrialMatch[];
+  filters?: TrialSlots;
+};
+
+export type StateType = {
+  messages: Message[];
+  ui?: UIMessage[];
+  request_user_location?: boolean;
+  location_confirmation_required?: boolean;
+  suggested_options?: string[];
+  user_location?: UserLocation;
+  slots?: TrialSlots;
+  trial_count?: number | null;
+  trial_matches?: TrialMatch[];
+  study_result_snapshots?: Record<string, StudyResultSnapshot>;
+};
 
 const useTypedStream = useStream<
   StateType,
@@ -35,6 +103,8 @@ const useTypedStream = useStream<
       messages?: Message[] | Message | string;
       ui?: (UIMessage | RemoveUIMessage)[] | UIMessage | RemoveUIMessage;
       context?: Record<string, unknown>;
+      user_location?: UserLocation;
+      slots?: TrialSlots;
     };
     CustomEventType: UIMessage | RemoveUIMessage;
   }

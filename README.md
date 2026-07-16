@@ -38,6 +38,81 @@ pnpm dev
 
 The app will be available at `http://localhost:3000`.
 
+## Browser location for trial matching
+
+This fork preserves the original Agent Chat UI and adds a location preference
+card for the `rag` graph. When graph state contains:
+
+```json
+{ "request_user_location": true }
+```
+
+the UI requests location through `navigator.geolocation`, shows a Google Maps
+preview, places a marker, lets the user choose an optional radius, and submits
+location as structured state rather than as a chat message:
+
+```json
+{
+  "user_location": {
+    "latitude": 49.2827,
+    "longitude": -123.1207,
+    "accuracy": 100,
+    "label": "Current location",
+    "provider": "browser_geolocation"
+  },
+  "slots": {
+    "location": {
+      "latitude": 49.2827,
+      "longitude": -123.1207,
+      "accuracy": 100,
+      "label": "Current location",
+      "provider": "browser_geolocation"
+    },
+    "location_confirmed": true,
+    "radius_miles": 25
+  }
+}
+```
+
+The **Change location** action uses Google Places Autocomplete when
+`NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY` is configured. Autocomplete uses a Places
+session token from the first prediction request through the selected place
+details request. If browser location is unsupported, denied, or times out, the
+UI falls back to location entry. Browser geolocation requires a secure HTTPS
+context except when the UI itself is opened on `localhost`.
+
+Study matches render as clickable cards. Selecting a card opens the full study
+modal. **Ask about this study** closes the modal and focuses the graph on that
+NCT ID for follow-up questions through a hidden `do-not-render-*` message. Maps
+are lazy-loaded: the embedded Google map is only created after the user clicks
+**Show location on map**. The UI intentionally labels
+`estimated_site_distance_miles` as approximate distance from the listed study
+site because many trial-site coordinates are best-effort listed-site locations
+rather than verified navigation coordinates.
+When returned, `location_status` is shown in the modal so users can see whether
+the closest listed site is recruiting/enrolling or only a fallback listed site.
+When `raw_json` is present on a match, the modal renders it as formatted raw
+ClinicalTrials.gov JSON for debugging and full-source inspection. It also pulls
+key raw-source fields into readable sections: **Overview**, **Eligibility**,
+**Locations & contacts**, **Study design**, **Outcomes**, and **Dates**.
+Outcome entries are grouped under **Primary outcomes**, **Secondary outcomes**,
+and **Other outcomes** instead of repeating the outcome type on every row.
+
+The UI also renders the graph's `suggested_options` as chips and the active
+trial slots in a collapsed **What I know so far** panel. Location/radius changes
+stay out of chat text; they are submitted as structured state through the
+location card.
+
+Study result lists are rendered from snapshots. The backend stores
+`study_result_snapshots` keyed by the assistant message ID for the `"Study
+matches"` message; the frontend suppresses that text bubble and renders the
+corresponding result block. This preserves old result lists after refreshes,
+study follow-up questions, or later filter changes.
+
+For the full architecture, file-by-file explanation, data flow, setup
+instructions, browser behavior, security notes, and troubleshooting guide, see
+[Geolocation Integration](docs/GEOLOCATION_INTEGRATION.md).
+
 ## Usage
 
 Once the app is running (or if using the deployed site), you'll be prompted to enter:
