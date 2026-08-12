@@ -5,8 +5,14 @@ import { Check, LoaderCircle, LocateFixed, MapPin, Pencil } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  DO_NOT_RENDER_ID_PREFIX,
+  ensureToolCallsHaveResponses,
+} from "@/lib/ensure-tool-responses";
 import { cn } from "@/lib/utils";
 import { useStreamContext, type TrialSlots } from "@/providers/Stream";
+import { Message } from "@langchain/langgraph-sdk";
+import { v4 as uuidv4 } from "uuid";
 
 type LocationStatus = "idle" | "requesting" | "ready" | "manual";
 type AutocompleteStatus = "idle" | "loading" | "ready" | "error";
@@ -223,6 +229,7 @@ export function LocationRequest({
   const stream = useStreamContext();
   const slots = stream.values.slots;
   const userLocation = stream.values.user_location;
+  const locationSearchQuery = stream.values.location_search_query?.trim() || "";
   const hasStoredUserLocation =
     typeof userLocation?.latitude === "number" &&
     typeof userLocation?.longitude === "number";
@@ -241,8 +248,13 @@ export function LocationRequest({
     hasStoredSlotLocation ||
     hasLegacySlotLocation ||
     hasSubmittedTextLocation;
+  const isBackendAskingForLocation =
+    stream.values.request_user_location === true;
+  const shouldOpenForLocationSearch =
+    Boolean(locationSearchQuery) && isBackendAskingForLocation;
   const shouldRequestLocation =
-    (stream.values.request_user_location === true && !hasCompletedLocation) ||
+    shouldOpenForLocationSearch ||
+    (isBackendAskingForLocation && !hasCompletedLocation) ||
     forceOpen;
   const storedLocation =
     typeof slots?.location === "object" &&
@@ -268,6 +280,7 @@ export function LocationRequest({
   const [autocompleteStatus, setAutocompleteStatus] =
     useState<AutocompleteStatus>("idle");
   const requestedForCurrentPrompt = useRef(false);
+  const prefilledQueryRef = useRef<string | null>(null);
   const mapElementRef = useRef<HTMLDivElement | null>(null);
   const placesServiceElementRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<GoogleMap | null>(null);
@@ -361,6 +374,7 @@ export function LocationRequest({
       setLocationError(null);
       setPredictions([]);
       setAutocompleteStatus("idle");
+      prefilledQueryRef.current = null;
       mapRef.current = null;
       markerRef.current = null;
       circleRef.current = null;
@@ -370,6 +384,21 @@ export function LocationRequest({
       return;
     }
     if (hasSubmittedLocation) {
+      return;
+    }
+    if (
+      shouldOpenForLocationSearch &&
+      locationSearchQuery &&
+      prefilledQueryRef.current !== locationSearchQuery
+    ) {
+      prefilledQueryRef.current = locationSearchQuery;
+      requestedForCurrentPrompt.current = true;
+      setSelectedLocation(null);
+      setManualLocation(locationSearchQuery);
+      setStatus("manual");
+      setIsChangingLocation(true);
+      setLocationError(null);
+      setPredictions([]);
       return;
     }
     if (hasCompletedLocation && storedLocation && !selectedLocation) {
@@ -403,6 +432,8 @@ export function LocationRequest({
     hasCompletedLocation,
     hasSubmittedLocation,
     hasSubmittedTextLocation,
+    shouldOpenForLocationSearch,
+    locationSearchQuery,
     requestLocation,
     selectedLocation,
     shouldRequestLocation,
@@ -644,9 +675,22 @@ export function LocationRequest({
       provider_place_id: selectedLocation.provider_place_id,
     };
 
+    const message: Message = {
+      id: `${DO_NOT_RENDER_ID_PREFIX}${uuidv4()}`,
+      type: "human",
+      content:
+        "Continue my clinical trial search with the selected preferences.",
+    };
+    const toolMessages = ensureToolCallsHaveResponses(stream.messages);
+
     stream.submit(
       {
+        messages: [...toolMessages, message],
         slots: nextSlots,
+        user_location: userLocation,
+        request_user_location: false,
+        location_search_query: null,
+        location_confirmation_required: false,
       },
       {
         streamMode: ["values"],
@@ -655,7 +699,11 @@ export function LocationRequest({
         optimisticValues: (previous) => ({
           ...previous,
           request_user_location: false,
+          location_search_query: null,
+          location_confirmation_required: false,
           slots: nextSlots,
+          user_location: userLocation,
+          messages: [...(previous.messages ?? []), ...toolMessages, message],
         }),
       },
     );
@@ -678,8 +726,22 @@ export function LocationRequest({
       delete nextSlots.radius_miles;
     }
 
+    const message: Message = {
+      id: `${DO_NOT_RENDER_ID_PREFIX}${uuidv4()}`,
+      type: "human",
+      content:
+        "Continue my clinical trial search with the selected preferences.",
+    };
+    const toolMessages = ensureToolCallsHaveResponses(stream.messages);
+
     stream.submit(
-      { slots: nextSlots },
+      {
+        messages: [...toolMessages, message],
+        slots: nextSlots,
+        request_user_location: false,
+        location_search_query: null,
+        location_confirmation_required: false,
+      },
       {
         streamMode: ["values"],
         streamSubgraphs: true,
@@ -687,7 +749,10 @@ export function LocationRequest({
         optimisticValues: (previous) => ({
           ...previous,
           request_user_location: false,
+          location_search_query: null,
+          location_confirmation_required: false,
           slots: nextSlots,
+          messages: [...(previous.messages ?? []), ...toolMessages, message],
         }),
       },
     );

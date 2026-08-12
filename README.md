@@ -80,6 +80,10 @@ session token from the first prediction request through the selected place
 details request. If browser location is unsupported, denied, or times out, the
 UI falls back to location entry. Browser geolocation requires a secure HTTPS
 context except when the UI itself is opened on `localhost`.
+When the backend returns `location_search_query`, usually from a chat message
+such as `change location to UBC`, the same location card opens with that query
+prefilled. The user still picks/uses a concrete location before structured
+coordinates are submitted to the graph.
 
 Study matches render as clickable cards. Selecting a card opens the full study
 modal. **Ask about this study** closes the modal and focuses the graph on that
@@ -97,6 +101,17 @@ key raw-source fields into readable sections: **Overview**, **Eligibility**,
 **Locations & contacts**, **Study design**, **Outcomes**, and **Dates**.
 Outcome entries are grouped under **Primary outcomes**, **Secondary outcomes**,
 and **Other outcomes** instead of repeating the outcome type on every row.
+
+Safety/adverse-event wording from ClinicalTrials.gov should be displayed
+carefully. Terms such as adverse event, safety, toxicity, tolerability, and side
+effect can appear in descriptions, outcomes, eligibility criteria,
+arms/interventions, or official observed adverse-event results. Protocol text is
+usually planned monitoring, not proof that an adverse event occurred; observed
+adverse events come from `resultsSection.adverseEventsModule` when available.
+The fullscreen study modal includes **Ask about side effects & safety**, which
+sends the selected NCT ID plus the safety-answer instructions to the graph. The
+raw JSON drawer remains available so safety-related summaries can be traced back
+to the exact source text.
 
 The UI also renders the graph's `suggested_options` as chips and the active
 trial slots in a collapsed **What I know so far** panel. Location/radius changes

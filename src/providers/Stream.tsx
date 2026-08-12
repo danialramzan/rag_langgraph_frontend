@@ -87,6 +87,7 @@ export type StateType = {
   messages: Message[];
   ui?: UIMessage[];
   request_user_location?: boolean;
+  location_search_query?: string | null;
   location_confirmation_required?: boolean;
   suggested_options?: string[];
   user_location?: UserLocation;
@@ -94,6 +95,7 @@ export type StateType = {
   trial_count?: number | null;
   trial_matches?: TrialMatch[];
   study_result_snapshots?: Record<string, StudyResultSnapshot>;
+  active_study_id?: string | null;
 };
 
 const useTypedStream = useStream<
@@ -105,6 +107,10 @@ const useTypedStream = useStream<
       context?: Record<string, unknown>;
       user_location?: UserLocation;
       slots?: TrialSlots;
+      request_user_location?: boolean;
+      location_search_query?: string | null;
+      location_confirmation_required?: boolean;
+      active_study_id?: string | null;
     };
     CustomEventType: UIMessage | RemoveUIMessage;
   }

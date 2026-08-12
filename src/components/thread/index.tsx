@@ -25,6 +25,7 @@ import {
   Maximize2,
   PanelRightOpen,
   PanelRightClose,
+  ShieldAlert,
   SquarePen,
   XIcon,
   Plus,
@@ -131,7 +132,11 @@ function SuggestedOptions({
       const toolMessages = ensureToolCallsHaveResponses(stream.messages);
 
       stream.submit(
-        { messages: [...toolMessages, message], slots: {} },
+        {
+          messages: [...toolMessages, message],
+          slots: {},
+          active_study_id: null,
+        },
         {
           streamMode: ["values"],
           streamSubgraphs: true,
@@ -139,8 +144,10 @@ function SuggestedOptions({
           optimisticValues: (previous) => ({
             ...previous,
             request_user_location: false,
+            location_search_query: null,
             location_confirmation_required: false,
             slots: {},
+            active_study_id: null,
             trial_matches: [],
             trial_count: null,
             messages: [...(previous.messages ?? []), ...toolMessages, message],
@@ -170,9 +177,17 @@ function SuggestedOptions({
     };
 
     const toolMessages = ensureToolCallsHaveResponses(stream.messages);
+    const currentSlots = stream.values.slots;
+    const currentUserLocation = stream.values.user_location;
+    const currentActiveStudyId = stream.values.active_study_id;
 
     stream.submit(
-      { messages: [...toolMessages, message] },
+      {
+        messages: [...toolMessages, message],
+        slots: currentSlots,
+        user_location: currentUserLocation,
+        active_study_id: currentActiveStudyId,
+      },
       {
         streamMode: ["values"],
         streamSubgraphs: true,
@@ -181,6 +196,12 @@ function SuggestedOptions({
           ...previous,
           trial_matches: [],
           trial_count: null,
+          request_user_location: false,
+          location_search_query: null,
+          location_confirmation_required: false,
+          slots: currentSlots,
+          user_location: currentUserLocation,
+          active_study_id: currentActiveStudyId,
           messages: [...(previous.messages ?? []), ...toolMessages, message],
         }),
       },
@@ -746,19 +767,30 @@ function StudyResults({
 
   if (!resolvedMatches.length) return null;
 
-  const focusAgentOnStudy = (match: TrialMatch) => {
+  const submitStudyQuestion = (
+    match: TrialMatch,
+    content: string,
+    hidden = false,
+  ) => {
     if (!match.id || stream.isLoading) return;
     setFullscreenStudy(null);
 
     const message: Message = {
-      id: `${DO_NOT_RENDER_ID_PREFIX}${uuidv4()}`,
+      id: `${hidden ? DO_NOT_RENDER_ID_PREFIX : ""}${uuidv4()}`,
       type: "human",
-      content: `I want to ask about study ${match.id}.`,
+      content,
     };
     const toolMessages = ensureToolCallsHaveResponses(stream.messages);
+    const currentSlots = stream.values.slots;
+    const currentUserLocation = stream.values.user_location;
 
     stream.submit(
-      { messages: [...toolMessages, message] },
+      {
+        messages: [...toolMessages, message],
+        slots: currentSlots,
+        user_location: currentUserLocation,
+        active_study_id: match.id,
+      },
       {
         streamMode: ["values"],
         streamSubgraphs: true,
@@ -767,9 +799,26 @@ function StudyResults({
           ...previous,
           trial_matches: [],
           trial_count: null,
+          request_user_location: false,
+          location_search_query: null,
+          location_confirmation_required: false,
+          slots: currentSlots,
+          user_location: currentUserLocation,
+          active_study_id: match.id,
           messages: [...(previous.messages ?? []), ...toolMessages, message],
         }),
       },
+    );
+  };
+
+  const focusAgentOnStudy = (match: TrialMatch) => {
+    submitStudyQuestion(match, `I want to ask about study ${match.id}.`, true);
+  };
+
+  const askAgentAboutStudySafety = (match: TrialMatch) => {
+    submitStudyQuestion(
+      match,
+      `For study ${match.id}, what side effects, risks, safety, toxicity, or adverse events are explicitly mentioned? Search the study record in this order: resultsSection.adverseEventsModule; protocolSection.outcomesModule; protocolSection.descriptionModule; protocolSection.eligibilityModule; protocolSection.armsInterventionsModule; then other study fields only if the earlier sections do not provide enough information. Only report information explicitly present in the study record. Do not infer side effects from drug names, intervention names, or outside medical knowledge. Classify each item as an observed adverse event, planned safety monitoring, potential protocol risk, safety-related eligibility information, or general safety statement. Clearly say whether posted adverse-event results exist, do not describe planned monitoring or eligibility rules as confirmed side effects, and include patient-friendly wording, observed-vs-planned status, source labels, JSON paths when available, and any limitation if observed results are not present.`,
     );
   };
 
@@ -974,6 +1023,15 @@ function StudyResults({
               >
                 Ask about this study
               </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => askAgentAboutStudySafety(fullscreenStudy.match)}
+                disabled={!fullscreenStudy.match.id || stream.isLoading}
+              >
+                <ShieldAlert className="h-4 w-4" />
+                Ask about side effects & safety
+              </Button>
             </div>
           </div>
         </div>
@@ -1141,7 +1199,13 @@ export function Thread() {
       Object.keys(artifactContext).length > 0 ? artifactContext : undefined;
 
     stream.submit(
-      { messages: [...toolMessages, newHumanMessage], context },
+      {
+        messages: [...toolMessages, newHumanMessage],
+        context,
+        slots: stream.values.slots,
+        user_location: stream.values.user_location,
+        active_study_id: stream.values.active_study_id,
+      },
       {
         streamMode: ["values"],
         streamSubgraphs: true,
@@ -1151,6 +1215,12 @@ export function Thread() {
           context,
           trial_matches: [],
           trial_count: null,
+          request_user_location: false,
+          location_search_query: null,
+          location_confirmation_required: false,
+          slots: prev.slots,
+          user_location: prev.user_location,
+          active_study_id: prev.active_study_id,
           messages: [
             ...(prev.messages ?? []),
             ...toolMessages,

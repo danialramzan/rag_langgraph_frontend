@@ -15,6 +15,9 @@ upstream LangChain Agent Chat UI.
    circle around the marker.
 7. The user can click **Change location** to use Google Places Autocomplete
    instead of browser geolocation.
+   The backend can also return `location_search_query` after a chat prompt such
+   as `change location to UBC`; in that case the same card opens with the query
+   prefilled.
 8. The user confirms with **Use this location**.
 9. The frontend submits normalized location state and optional `radius_miles`
    back to the same LangGraph thread.
@@ -188,11 +191,44 @@ streaming. This keeps separate study lists stable in the transcript.
   - Groups outcome rows under Primary outcomes, Secondary outcomes, and Other
     outcomes.
   - Renders `raw_json` as formatted ClinicalTrials.gov JSON when present.
+  - Keeps raw JSON available for safety/adverse-event inspection because safety
+    language can appear in descriptions, outcomes, eligibility, arms, or
+    official observed adverse-event results.
   - Submits hidden `do-not-render-*` focus messages for **Ask about this
     study**.
   - Lazy-loads the map with **Show location on map**.
 - `.env.example`
   - Declares `NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY`.
+
+## Safety/adverse-event display note
+
+ClinicalTrials.gov safety language is not always observed side-effect data.
+Protocol sections may say a study will measure adverse events or assess safety
+and tolerability. That is planned monitoring, not necessarily an event that
+happened. Actual observed adverse-event results are under
+`resultsSection.adverseEventsModule` when the study has posted results.
+
+The fullscreen study modal includes **Ask about side effects & safety**. That
+prompt sends the selected NCT ID and asks the backend to search the raw study
+record in this order:
+
+- `resultsSection.adverseEventsModule`
+- `protocolSection.outcomesModule`
+- `protocolSection.descriptionModule`
+- `protocolSection.eligibilityModule`
+- `protocolSection.armsInterventionsModule`
+- other study fields only if the preceding sections are not enough
+
+Safety answers should classify record text as observed adverse events, planned
+safety monitoring, potential protocol risks, safety-related eligibility
+information, or general safety statements. They should also include the source
+label, JSON path, and whether each item was observed or only planned.
+
+False positives are possible, including location names such as "Safety Harbor",
+psychological phrases such as "safety behaviors", data safety monitoring boards,
+occupational safety, references, and data-access review text. UI copy should
+distinguish planned safety monitoring, eligibility exclusions, narrative
+safety/tolerability text, and observed adverse-event results.
 
 ## HTTPS requirement
 
